@@ -1,0 +1,4 @@
+[
+  {"datetime":"2026-06-02T09:15:00Z","account":"DOMAIN\\operator","device":"LAPTOP-1","type":"file_access","custom_field":"retained"},
+  {"datetime":"2026-06-02 09:16:00","account":"DOMAIN\\operator","device":"LAPTOP-1","type":"logon"}
+]

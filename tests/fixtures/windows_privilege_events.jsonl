@@ -1,0 +1,4 @@
+{"TimeCreated":"2026-07-18T08:00:00.000Z","EventID":"4624","TargetUserName":"CONTOSO\\AdminUser","Computer":"DC-01.contoso.local","IpAddress":"192.0.2.80","LogonType":"2"}
+{"TimeCreated":"2026-07-18T08:00:01.000Z","EventID":"4672","SubjectUserName":"CONTOSO\\AdminUser","Computer":"DC-01.contoso.local","PrivilegeList":"SeSecurityPrivilege SeBackupPrivilege SeRestorePrivilege SeDebugPrivilege"}
+{"TimeCreated":"2026-07-18T08:01:00.000Z","EventID":"4728","SubjectUserName":"CONTOSO\\AdminUser","TargetUserName":"Domain Admins","GroupName":"Domain Admins","MemberName":"CONTOSO\\NewUser","Computer":"DC-01.contoso.local"}
+{"TimeCreated":"2026-07-18T08:02:00.000Z","EventID":"4729","SubjectUserName":"CONTOSO\\AdminUser","TargetUserName":"Domain Admins","GroupName":"Domain Admins","MemberName":"CONTOSO\\DepartingUser","Computer":"DC-01.contoso.local"}

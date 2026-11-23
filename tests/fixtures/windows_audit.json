@@ -1,0 +1,3 @@
+[
+  {"timestamp":"2026-06-02T09:15:00Z","TargetUserName":"CONTOSO\\Alice","Computer":"WS-01","EventID":"4625","IpAddress":"198.51.100.44","Status":"0xC000006A","SubStatus":"0xC000006A"}
+]

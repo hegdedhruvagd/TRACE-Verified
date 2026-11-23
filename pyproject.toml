@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trace-verified"
+version = "0.1.0"
+description = "Offline-first deterministic security event ingestion and analysis core."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
+[project.scripts]
+trace-verified = "trace_verified.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["trace_verified*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

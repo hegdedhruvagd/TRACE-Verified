@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+*.log
+*.tmp
+
+# Local development and agent configuration
+.agents/
+.acceptance/
+scratch/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Temporary Office files
+~$*.pptx
+~$*.docx
+~$*.xlsx
+
+# Local review archives
+TRACE-Verified-Review*.zip
+TRACE-Verified-M4-Review*

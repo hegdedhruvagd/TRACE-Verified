@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRACE-Verified | Offline SOC Incident Triage Workbench</title>
+  <link rel="stylesheet" href="/style.css?v=apple-soc-4.1">
+</head>
+<body class="soc-dark">
+  <div class="app-container">
+
+    <!-- Top Status & Navigation Bar -->
+    <header class="soc-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">TRACE-VERIFIED</span>
+          <span class="brand-sub">Offline Security Incident Triage</span>
+        </div>
+      </div>
+
+      <!-- Live Environment Badges -->
+      <div class="header-status-group">
+        <div class="status-pill status-offline" title="Zero cloud calls, strictly local loopback execution">
+          <span class="status-indicator-dot dot-emerald"></span>
+          <span class="status-label">OFFLINE ENFORCED</span>
+          <span class="status-value">127.0.0.1</span>
+        </div>
+
+        <div class="status-pill" id="backend-status-pill" title="Deterministic Python Analysis Core">
+          <span class="status-indicator-dot dot-emerald" id="backend-dot"></span>
+          <span class="status-label">BACKEND:</span>
+          <span class="status-value" id="backend-status-text">v0.1.0 Ready</span>
+        </div>
+
+        <div class="status-pill" id="ollama-status-pill" title="Local Ollama phi4-mini:latest status">
+          <span class="status-indicator-dot dot-amber" id="ollama-dot"></span>
+          <span class="status-label">LOCAL OLLAMA:</span>
+          <span class="status-value" id="ollama-status-text">Checking...</span>
+          <button class="icon-btn-tiny" id="btn-refresh-ollama" title="Re-check local Ollama">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="soc-layout">
+
+      <!-- Left Sidebar Navigation -->
+      <aside class="soc-sidebar">
+        <div class="sidebar-section-title">SOC WORKBENCH</div>
+        <nav class="sidebar-nav">
+          <a href="#ingestion" class="nav-item active" id="nav-ingestion">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Log Ingestion</span>
+          </a>
+
+          <a href="#overview" class="nav-item" id="nav-overview">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>SOC Overview</span>
+          </a>
+
+          <a href="#incidents" class="nav-item" id="nav-incidents">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>Incidents Triage</span>
+            <span class="nav-badge" id="nav-incident-badge" style="display:none;">0</span>
+          </a>
+
+          <a href="#coverage" class="nav-item" id="nav-coverage">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>Detector Coverage</span>
+          </a>
+
+          <a href="#provenance" class="nav-item" id="nav-provenance">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            <span>Sources & Provenance</span>
+          </a>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="sidebar-stat">
+            <span class="stat-caption">ENGINE MODE</span>
+            <span class="stat-highlight">Deterministic Rules</span>
+          </div>
+          <div class="sidebar-stat">
+            <span class="stat-caption">LOCAL TIME</span>
+            <span class="stat-val font-mono" id="clock-display">--:--:--</span>
+          </div>
+          <div class="sidebar-security-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span>Isolated Environment</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Center Content Area -->
+      <main class="soc-main">
+
+        <!-- Notification / Alert Banner -->
+        <div id="global-alert" class="alert-banner" style="display:none;">
+          <div class="alert-content">
+            <span class="alert-icon" id="alert-icon"></span>
+            <span class="alert-message" id="alert-message"></span>
+          </div>
+          <button class="alert-close" id="alert-close">&times;</button>
+        </div>
+
+        <!-- SECTION 1: INGESTION WORKBENCH -->
+        <section id="section-ingestion" class="soc-section active">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Evidence Ingestion & Triage</h1>
+              <p class="section-desc">Ingest Windows authentication, security, and process logs in CSV, JSON, or JSONL format. All analysis runs deterministically on this machine.</p>
+            </div>
+          </div>
+
+          <!-- Quick Load Sample Scenarios -->
+          <div class="card sample-card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <span>Quick Demo Scenarios (One-Click Ingestion)</span>
+              </div>
+              <span class="badge badge-subtle">Ready to evaluate</span>
+            </div>
+            <div class="sample-pills-container" id="samples-container">
+              <span class="loading-text">Loading verified fixture scenarios...</span>
+            </div>
+          </div>
+
+          <!-- Drag and Drop Upload Zone -->
+          <div class="upload-workbench-grid">
+            <div class="card upload-drop-card">
+              <div class="drop-zone" id="drop-zone">
+                <input type="file" id="file-input" multiple accept=".csv,.json,.jsonl,.ndjson" class="file-input-hidden">
+                <div class="drop-icon">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </div>
+                <div class="drop-text-primary">Drag & drop audit log files here</div>
+                <div class="drop-text-secondary">or <button type="button" class="btn-text-action" id="btn-browse">browse files</button> from your local disk</div>
+                <div class="drop-supported-tags">
+                  <span class="format-tag">.CSV</span>
+                  <span class="format-tag">.JSON</span>
+                  <span class="format-tag">.JSONL</span>
+                  <span class="format-tag">.NDJSON</span>
+                </div>
+                <div class="drop-limit-note">Max 50MB total per batch &bull; Evaluated locally &bull; Cleaned up immediately</div>
+              </div>
+            </div>
+
+            <!-- Staged Files & Action Control Box -->
+            <div class="card staged-files-card">
+              <div class="card-header">
+                <div class="card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span>Staged Log Files</span>
+                  <span class="badge badge-count" id="staged-count-badge">0</span>
+                </div>
+                <button type="button" class="btn-link" id="btn-clear-staged" style="display:none;">Clear all</button>
+              </div>
+
+              <div class="staged-files-list" id="staged-files-list">
+                <div class="empty-staged-state">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  <p>No log files staged yet.</p>
+                  <span>Select a sample scenario above or drop log files into the upload box.</span>
+                </div>
+              </div>
+
+              <!-- Collapsible Advanced Config Options -->
+              <details class="advanced-config-details">
+                <summary class="config-summary">
+                  <span>Advanced Analysis Parameters</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="config-grid">
+                  <div class="config-field">
+                    <label for="cfg-auth-window">Auth Window (mins)</label>
+                    <input type="number" id="cfg-auth-window" value="10" min="1" max="1440">
+                  </div>
+                  <div class="config-field">
+                    <label for="cfg-brute-threshold">Brute Force Limit</label>
+                    <input type="number" id="cfg-brute-threshold" value="5" min="2" max="100">
+                  </div>
+                  <div class="config-field">
+                    <label for="cfg-spray-threshold">Spray Account Limit</label>
+                    <input type="number" id="cfg-spray-threshold" value="5" min="2" max="100">
+                  </div>
+                  <div class="config-field">
+                    <label for="cfg-success-threshold">Success Threshold</label>
+                    <input type="number" id="cfg-success-threshold" value="5" min="2" max="100">
+                  </div>
+                  <div class="config-field">
+                    <label for="cfg-corr-window">Correlation Window (mins)</label>
+                    <input type="number" id="cfg-corr-window" value="30" min="1" max="1440">
+                  </div>
+                  <div class="config-field">
+                    <label for="cfg-max-duration">Max Incident (mins)</label>
+                    <input type="number" id="cfg-max-duration" value="240" min="5" max="10080">
+                  </div>
+                  <div class="config-field full-width">
+                    <label for="cfg-approved-ids">Approved Activity Finding IDs (comma-separated)</label>
+                    <input type="text" id="cfg-approved-ids" placeholder="e.g. fnd_0123456789abcdef01234567">
+                  </div>
+                </div>
+              </details>
+
+              <div class="staged-action-bar">
+                <button type="button" class="btn btn-primary" id="btn-run-analysis" disabled>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  <span>Run Deterministic Analysis</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: SOC OVERVIEW & RESULTS -->
+        <section id="section-overview" class="soc-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">SOC Triage Overview</h1>
+              <p class="section-desc">Summary of ingested log volume, validation metrics, detector coverage, and correlated security incidents.</p>
+            </div>
+            <div class="header-actions">
+              <span class="analysis-tag" id="analysis-id-tag">No analysis executed</span>
+            </div>
+          </div>
+
+          <!-- Overview Top Metrics Bar -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">TOTAL EVENTS</span>
+                <span class="metric-badge badge-neutral">Processed</span>
+              </div>
+              <div class="metric-value font-mono" id="metric-total-rows">0</div>
+              <div class="metric-footer" id="metric-sources-count">From 0 source files</div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">INGESTION INTEGRITY</span>
+                <span class="metric-badge badge-emerald" id="badge-integrity">Valid</span>
+              </div>
+              <div class="metric-split">
+                <div>
+                  <span class="sub-label">Accepted</span>
+                  <span class="metric-subval text-emerald font-mono" id="metric-accepted-rows">0</span>
+                </div>
+                <div class="split-divider"></div>
+                <div>
+                  <span class="sub-label">Malformed</span>
+                  <span class="metric-subval text-crimson font-mono" id="metric-malformed-rows">0</span>
+                </div>
+              </div>
+              <div class="metric-footer" id="metric-malformed-rate">0% malformed rows</div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">INCIDENTS CORRELATED</span>
+                <span class="metric-badge badge-amber" id="badge-incidents">0 Detected</span>
+              </div>
+              <div class="metric-value font-mono" id="metric-incidents-count">0</div>
+              <div class="metric-footer" id="metric-severity-pills">
+                <span class="pill-mini pill-crit">0 Crit</span>
+                <span class="pill-mini pill-high">0 High</span>
+                <span class="pill-mini pill-med">0 Med</span>
+                <span class="pill-mini pill-low">0 Low</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-title">DETECTOR COVERAGE</span>
+                <span class="metric-badge badge-blue" id="badge-coverage">0/4</span>
+              </div>
+              <div class="metric-value font-mono" id="metric-coverage-rate">0%</div>
+              <div class="metric-footer" id="metric-coverage-detail">0 executed, 0 skipped</div>
+            </div>
+          </div>
+
+          <!-- Incidents Preview Banner for Next Milestones -->
+          <div class="card incident-preview-card" id="incidents-preview-card" style="display:none;">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span>Correlated Incidents Triage Summary</span>
+              </div>
+              <span class="badge badge-emerald">Deterministic Python Output</span>
+            </div>
+            <div class="incidents-preview-list" id="incidents-preview-list">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- SECTION 3: DETECTOR COVERAGE CARDS -->
+          <div class="card coverage-card" id="section-coverage-card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                <span>Deterministic Detector Execution Status</span>
+              </div>
+              <span class="badge badge-subtle">Audit Guardrail</span>
+            </div>
+            <div class="detector-coverage-notice">
+              <strong>SOC Operational Notice:</strong> A skipped detector indicates that required event fields or audit types were omitted from the uploaded logs, not that the environment is clear of risk.
+            </div>
+            <div class="detector-grid" id="detector-grid">
+              <!-- Dynamically populated -->
+              <div class="empty-coverage-state">Run analysis to evaluate detector candidate events.</div>
+            </div>
+          </div>
+
+          <!-- SECTION 4: SOURCE INGESTION & PROVENANCE -->
+          <div class="card provenance-card" id="section-provenance-card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span>Source File Ingestion & Canonical Field Coverage</span>
+              </div>
+              <span class="badge badge-subtle">Provenance Tracking</span>
+            </div>
+            <div class="source-list" id="source-list">
+              <!-- Dynamically populated -->
+              <div class="empty-coverage-state">No source files analyzed in current session.</div>
+            </div>
+          </div>
+
+          <!-- SECTION 5: WARNINGS & AUDIT NOTICES -->
+          <div class="card warnings-card" id="section-warnings-card" style="display:none;">
+            <div class="card-header">
+              <div class="card-title text-amber">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span>Ingestion & Chronology Warnings</span>
+              </div>
+              <span class="badge badge-amber" id="warnings-count-badge">0 Warnings</span>
+            </div>
+            <ul class="warnings-list" id="warnings-list">
+              <!-- Dynamically populated -->
+            </ul>
+          </div>
+        </section>
+
+        <!-- SECTION 3: INCIDENTS EXPLORER & DETAIL WORKBENCH -->
+        <section id="section-incidents" class="soc-section">
+          
+          <!-- View A: Incidents List & Explorer -->
+          <div id="incidents-list-view">
+            <div class="section-header">
+              <div>
+                <h1 class="section-title">Incident Explorer & Triage</h1>
+                <p class="section-desc">Correlated multi-stage security incidents grouped by normalized identity context and evaluated through additive heuristic scoring.</p>
+              </div>
+              <div class="header-actions">
+                <span class="analysis-tag" id="incidents-analysis-id">No analysis</span>
+              </div>
+            </div>
+
+            <!-- Filters and Search Toolbar -->
+            <div class="card toolbar-card">
+              <div class="incidents-toolbar">
+                <div class="search-input-wrapper">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <input type="text" id="incident-search-input" placeholder="Search incidents by user, host, title, stage, or ID...">
+                </div>
+
+                <div class="filter-group">
+                  <span class="filter-label">Severity:</span>
+                  <div class="filter-pills" id="severity-filter-pills">
+                    <button type="button" class="filter-pill active" data-severity="all">All</button>
+                    <button type="button" class="filter-pill" data-severity="critical">Critical</button>
+                    <button type="button" class="filter-pill" data-severity="high">High</button>
+                    <button type="button" class="filter-pill" data-severity="medium">Medium</button>
+                    <button type="button" class="filter-pill" data-severity="low">Low</button>
+                  </div>
+                </div>
+
+                <div class="sort-group">
+                  <span class="filter-label">Sort:</span>
+                  <select id="incident-sort-select" class="soc-select">
+                    <option value="score_desc">Score (Highest First)</option>
+                    <option value="score_asc">Score (Lowest First)</option>
+                    <option value="time_desc">Time (Most Recent)</option>
+                    <option value="time_asc">Time (Oldest First)</option>
+                    <option value="severity">Severity Order</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Incidents Cards Grid -->
+            <div class="incidents-cards-grid" id="incident-cards-container">
+              <div class="empty-state-box">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <div class="empty-state-title">No Incident Analysis Available</div>
+                <div class="empty-state-desc">Select a sample scenario in Log Ingestion or upload log files to correlate deterministic security incidents.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- View B: Incident Detail View -->
+          <div id="incident-detail-view" style="display:none;">
+            <div class="detail-top-nav">
+              <button type="button" class="btn-back" id="btn-back-to-incidents">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="19" y1="12" x2="5" y2="12"/>
+                  <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                <span>Back to Incident List</span>
+              </button>
+              <div class="breadcrumb font-mono">
+                <span>Incidents</span> / <span id="detail-breadcrumb-id" class="text-cyan">inc_...</span>
+              </div>
+            </div>
+
+            <!-- Incident Main Overview Card -->
+            <div class="card incident-hero-card">
+              <div class="incident-hero-header">
+                <div>
+                  <div class="incident-hero-meta">
+                    <span class="pill-mini" id="detail-severity-badge">CRITICAL</span>
+                    <span class="incident-id-copyable font-mono" id="detail-incident-id" title="Click to copy">inc_...</span>
+                    <span class="incident-duration-tag" id="detail-time-span">--</span>
+                  </div>
+                  <h2 class="incident-hero-title" id="detail-title">Incident Title</h2>
+                  <div class="scoring-notice-text" id="detail-scoring-notice">Heuristic score for investigation prioritization; not a validated risk model.</div>
+                </div>
+
+                <div class="incident-score-widget">
+                  <div class="score-dial">
+                    <span class="score-number font-mono" id="detail-score-val">100</span>
+                    <span class="score-max">/100</span>
+                  </div>
+                  <div class="score-meter-bar">
+                    <div class="score-meter-fill" id="detail-score-fill" style="width: 100%;"></div>
+                  </div>
+                  <span class="score-caption">Heuristic Score</span>
+                </div>
+              </div>
+
+              <!-- Entities Banner -->
+              <div class="incident-entities-row">
+                <div class="entity-group">
+                  <span class="entity-label">AFFECTED USERS</span>
+                  <div class="entity-tags" id="detail-users-list"></div>
+                </div>
+                <div class="entity-group">
+                  <span class="entity-label">AFFECTED HOSTS</span>
+                  <div class="entity-tags" id="detail-hosts-list"></div>
+                </div>
+                <div class="entity-group">
+                  <span class="entity-label">TRACEABILITY SET</span>
+                  <div class="entity-tags font-mono text-muted" id="detail-counts-summary">4 Findings &bull; 8 Events</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Detail Sub-Tabs Navigation -->
+            <div class="detail-subtabs">
+              <button type="button" class="subtab-btn active" data-tab="tab-timeline">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Attack Timeline</span>
+              </button>
+              <button type="button" class="subtab-btn" data-tab="tab-stages">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                <span>Attack Stages</span>
+              </button>
+              <button type="button" class="subtab-btn" data-tab="tab-evidence">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Supporting Events</span>
+              </button>
+              <button type="button" class="subtab-btn" data-tab="tab-score">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span>Score Breakdown</span>
+              </button>
+              <button type="button" class="subtab-btn" data-tab="tab-guidance">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Investigative Next Steps</span>
+              </button>
+              <button type="button" class="subtab-btn" data-tab="tab-explanation" id="subtab-btn-explanation">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                  <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+                <span>Local SLM Explanation</span>
+                <span class="subtab-status-pill" id="explanation-subtab-badge" style="display:none;"></span>
+              </button>
+            </div>
+
+            <!-- TAB 1: ATTACK TIMELINE -->
+            <div class="subtab-content active" id="tab-timeline">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Chronological Incident Timeline</span>
+                  </div>
+                  <span class="badge badge-subtle">Deterministic Event Ordering</span>
+                </div>
+                <div class="timeline-container" id="timeline-list-container">
+                  <!-- Rendered via JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 2: ATTACK STAGES -->
+            <div class="subtab-content" id="tab-stages">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/></svg>
+                    <span>Deterministic Attack Chain Progression</span>
+                  </div>
+                  <span class="badge badge-subtle">Stage Interpretation</span>
+                </div>
+                <div class="stages-stepper" id="stages-stepper-container">
+                  <!-- Rendered via JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 3: SUPPORTING EVENTS & EVIDENCE -->
+            <div class="subtab-content" id="tab-evidence">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                    <span>Canonical Event Evidence Records</span>
+                  </div>
+                  <span class="badge badge-count" id="evidence-count-badge">0 Events</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="soc-table" id="evidence-table">
+                    <thead>
+                      <tr>
+                        <th>Time (UTC)</th>
+                        <th>Event ID</th>
+                        <th>Type / Action</th>
+                        <th>Canonical User</th>
+                        <th>Actor</th>
+                        <th>Target Member</th>
+                        <th>Target Group</th>
+                        <th>Host</th>
+                        <th>Source IP</th>
+                        <th>Process / Command</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="evidence-table-body">
+                      <!-- Rendered via JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 4: SCORE BREAKDOWN -->
+            <div class="subtab-content" id="tab-score">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    <span>Additive Heuristic Score Accounting</span>
+                  </div>
+                  <span class="badge badge-emerald">Auditable Points</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="soc-table" id="score-table">
+                    <thead>
+                      <tr>
+                        <th>Category</th>
+                        <th>Points</th>
+                        <th>Rule / Code</th>
+                        <th>Explanation</th>
+                        <th>Finding Reference</th>
+                      </tr>
+                    </thead>
+                    <tbody id="score-table-body">
+                      <!-- Rendered via JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 5: INVESTIGATIVE STEPS & LIMITATIONS -->
+            <div class="subtab-content" id="tab-guidance">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title text-emerald">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span>Recommended Deterministic Next Steps</span>
+                  </div>
+                </div>
+                <ul class="steps-checklist" id="detail-next-steps-list"></ul>
+              </div>
+
+              <div class="guidance-grid">
+                <div class="card">
+                  <div class="card-header">
+                    <div class="card-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      <span>Correlation Rationale</span>
+                    </div>
+                  </div>
+                  <ul class="guidance-list" id="detail-rationale-list"></ul>
+                </div>
+
+                <div class="card">
+                  <div class="card-header">
+                    <div class="card-title text-amber">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <span>Known Limitations & Missing Evidence</span>
+                    </div>
+                  </div>
+                  <ul class="guidance-list" id="detail-limitations-list"></ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 6: LOCAL SLM EXPLANATION -->
+            <div class="subtab-content" id="tab-explanation">
+              <div class="card explanation-card">
+                <div class="card-header explanation-header">
+                  <div class="card-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                      <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                    <span>Local SLM Triage Explanation</span>
+                  </div>
+                  <div class="explanation-status-meta" id="explanation-header-status">
+                    <span class="badge badge-subtle font-mono" id="explanation-model-badge">phi4-mini:latest</span>
+                    <span class="badge badge-neutral" id="explanation-status-badge">Not Requested</span>
+                  </div>
+                </div>
+
+                <!-- SOC Guardrail Disclaimer Banner -->
+                <div class="slm-disclaimer-banner">
+                  <div class="slm-disclaimer-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                      <line x1="12" y1="9" x2="12" y2="13"/>
+                      <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                  </div>
+                  <div class="slm-disclaimer-text">
+                    <strong>Advisory AI Interpretation — Not Forensic Evidence:</strong> Generated locally via Ollama. It does not overwrite, mutate, or override deterministic incident findings, severity ratings, heuristic scores, or rule correlations.
+                  </div>
+                </div>
+
+                <!-- Action Bar & Controls -->
+                <div class="explanation-action-bar">
+                  <div class="explanation-action-info">
+                    <div class="slm-model-spec">
+                      <span class="spec-label">MODEL:</span>
+                      <span class="spec-val font-mono" id="explanation-model-name">phi4-mini:latest</span>
+                      <span class="spec-label" style="margin-left:0.75rem;">HOST:</span>
+                      <span class="spec-val font-mono">127.0.0.1:11434 (Loopback)</span>
+                    </div>
+                    <div class="slm-status-desc" id="explanation-status-desc">
+                      Generate an advisory incident triage summary and natural language interpretation using local inference.
+                    </div>
+                  </div>
+                  <div class="explanation-action-controls">
+                    <div class="explanation-options-row">
+                      <label for="cfg-explain-timeout" class="options-label">Timeout (s):</label>
+                      <input type="number" id="cfg-explain-timeout" value="180" min="5" max="300" class="soc-input-mini">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="btn-request-explanation">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                      <span id="btn-request-explanation-text">Request Local Explanation</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Main Dynamic Content -->
+                <div class="explanation-body-content" id="explanation-body-content">
+                  <!-- Rendered dynamically via JS -->
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading-overlay" style="display:none;">
+    <div class="loading-modal">
+      <div class="soc-spinner"></div>
+      <div class="loading-title">Processing Security Logs</div>
+      <div class="loading-desc" id="loading-desc">Executing deterministic detectors & correlating incidents...</div>
+    </div>
+  </div>
+
+  <!-- Canonical Event Forensic Inspector Modal -->
+  <div class="event-modal-backdrop" id="event-modal" style="display:none;">
+    <div class="event-modal-dialog">
+      <div class="event-modal-header">
+        <div class="modal-title-group">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <div>
+            <div class="modal-title">Canonical Event Forensic Record</div>
+            <div class="modal-subtitle font-mono" id="modal-event-id">evt_...</div>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-event-modal">&times;</button>
+      </div>
+
+      <div class="event-modal-body">
+        <div class="event-meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">CANONICAL TIMESTAMP</span>
+            <span class="meta-val font-mono" id="modal-timestamp">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">EVENT TYPE / CODE</span>
+            <span class="meta-val font-mono" id="modal-event-type">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">CANONICAL USER</span>
+            <span class="meta-val font-mono text-cyan" id="modal-user">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">ACTOR / INITIATOR</span>
+            <span class="meta-val font-mono text-cyan" id="modal-actor">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">TARGET MEMBER</span>
+            <span class="meta-val font-mono text-cyan" id="modal-target-member">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">TARGET GROUP</span>
+            <span class="meta-val font-mono text-cyan" id="modal-target-group">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">TARGET HOST</span>
+            <span class="meta-val font-mono text-cyan" id="modal-host">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">SOURCE IP</span>
+            <span class="meta-val font-mono" id="modal-source-ip">--</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">SOURCE PROVENANCE</span>
+            <span class="meta-val font-mono" id="modal-source-file">--</span>
+          </div>
+        </div>
+
+        <div class="meta-field-block" id="modal-command-block" style="display:none;">
+          <span class="meta-label">PROCESS COMMAND LINE</span>
+          <pre class="code-preview font-mono" id="modal-command-line"></pre>
+        </div>
+
+        <div class="meta-field-block" id="modal-decoded-block" style="display:none;">
+          <span class="meta-label">DECODED POWERSHELL COMMAND (TEXT ONLY - NOT EXECUTED)</span>
+          <pre class="code-preview font-mono text-cyan" id="modal-decoded-command"></pre>
+        </div>
+
+        <div class="meta-field-block">
+          <div class="meta-field-header">
+            <span class="meta-label">RAW FORENSIC RECORD</span>
+            <span class="meta-label font-mono text-muted" id="modal-raw-sha256">SHA-256: --</span>
+          </div>
+          <pre class="code-preview code-json font-mono" id="modal-raw-record"></pre>
+        </div>
+      </div>
+
+      <div class="event-modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-copy-raw-json">Copy JSON</button>
+        <button type="button" class="btn btn-primary" id="btn-modal-close-action">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+
