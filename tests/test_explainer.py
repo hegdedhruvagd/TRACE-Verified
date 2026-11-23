@@ -9,7 +9,7 @@ import pytest
 
 from trace_verified.detection import Finding
 from trace_verified.explainer import (ExplanationConfig, build_evidence_dossier, explain_incident,
-                                      verify_explanation, _prompt_size)
+                                      verify_explanation, _parse_json, _prompt_size)
 from trace_verified.incidents import AttackStage, correlate_findings
 from trace_verified.pipeline import analyze_paths
 from trace_verified.schemas import CanonicalEvent, Severity
@@ -78,6 +78,52 @@ def test_markdown_fenced_json_is_accepted():
     with patch("trace_verified.explainer.urlopen", return_value=_ollama_response(content)):
         result = explain_incident(incident, findings, events)
     assert result.status == "local_model"
+
+
+def test_compact_json_with_neutral_prose_or_markdown_wrapper_is_accepted():
+    incident, findings, events = _case()
+    contents = [
+        "Here is the requested JSON:\n" + _model_json(),
+        "Sure, here is the JSON response:\n```json\n" + _model_json() + "\n```",
+    ]
+    for content in contents:
+        with patch("trace_verified.explainer.urlopen", return_value=_ollama_response(content)):
+            result = explain_incident(incident, findings, events)
+        assert result.status == "local_model"
+
+
+def test_parser_bounds_nesting_and_reports_sanitized_parse_diagnostics():
+    nested = "{}"
+    for _ in range(7):
+        nested = '{"child":' + nested + "}"
+    assert _parse_json(nested)["child"]
+
+    too_deep = '{"child":' + nested + "}"
+    with pytest.raises(ValueError, match="nesting depth limit"):
+        _parse_json(too_deep)
+
+    secret = "SENSITIVE_RAW_LOG_VALUE"
+    with pytest.raises(ValueError, match="response_chars") as raised:
+        _parse_json(f"{secret} is not JSON")
+    assert secret not in str(raised.value)
+
+    with pytest.raises(ValueError, match="trailing text"):
+        _parse_json(_model_json() + "\nAn unsupported claim about an attacker.")
+
+    with pytest.raises(ValueError, match="response_size_limit"):
+        _parse_json(_model_json(), max_response_bytes=100)
+
+
+def test_request_schema_and_prompt_require_one_compact_structured_object():
+    incident, findings, events = _case()
+    with patch("trace_verified.explainer.urlopen", return_value=_ollama_response(_model_json())) as request:
+        result = explain_incident(incident, findings, events)
+    assert result.status == "local_model"
+    body = json.loads(request.call_args.args[0].data)
+    assert body["format"]["additionalProperties"] is False
+    assert body["format"]["properties"]["incident_summary"]["maxLength"] == 400
+    assert body["format"]["properties"]["recommended_actions"]["maxItems"] == 4
+    assert "one compact JSON object" in body["messages"][0]["content"]
 
 
 def test_invalid_json_and_wrong_schema_retry_once_then_fallback_as_rejected():

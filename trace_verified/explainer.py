@@ -23,11 +23,16 @@ _FIELDS = {
     "incident_summary", "attack_interpretation", "evidence_ids",
     "alternative_explanations", "recommended_actions", "limitations",
 }
-_TEXT_LIST_LIMITS = {"alternative_explanations": 8, "recommended_actions": 8, "limitations": 8}
+_TEXT_LIST_LIMITS = {"alternative_explanations": 4, "recommended_actions": 4, "limitations": 4}
 _MAX_CITED_IDS = 24
+_MAX_JSON_DEPTH = 8
+_MAX_SCALAR_CHARS = 400
+_MAX_LIST_ITEM_CHARS = 300
 _RETRY_FEEDBACK_RESERVE = 300
 _SYSTEM_PROMPT = (
-    "Explain only the deterministic incident dossier. Return JSON matching the supplied schema. "
+    "Explain only the deterministic incident dossier. Return exactly one compact JSON object matching the supplied schema; "
+    "include no Markdown, comments, or extra prose. Keep incident_summary and attack_interpretation at most 400 characters; "
+    "keep each list to at most 4 concise items of at most 300 characters each. "
     "Use only dossier facts. Do not create findings or change severity, score, approval state, or deterministic recommendations. "
     "Citations must use dossier event IDs. Do not infer successful access, privilege change, lateral movement, or exfiltration "
     "without explicit evidence. Negated statements are allowed when they accurately describe missing evidence. "
@@ -42,12 +47,12 @@ _SYSTEM_PROMPT = (
 _RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "incident_summary": {"type": "string"},
-        "attack_interpretation": {"type": "string"},
-        "evidence_ids": {"type": "array", "items": {"type": "string"}, "maxItems": _MAX_CITED_IDS},
-        "alternative_explanations": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
-        "recommended_actions": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
-        "limitations": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
+        "incident_summary": {"type": "string", "maxLength": _MAX_SCALAR_CHARS},
+        "attack_interpretation": {"type": "string", "maxLength": _MAX_SCALAR_CHARS},
+        "evidence_ids": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": _MAX_CITED_IDS},
+        "alternative_explanations": {"type": "array", "items": {"type": "string", "maxLength": _MAX_LIST_ITEM_CHARS}, "maxItems": 4},
+        "recommended_actions": {"type": "array", "items": {"type": "string", "maxLength": _MAX_LIST_ITEM_CHARS}, "maxItems": 4},
+        "limitations": {"type": "array", "items": {"type": "string", "maxLength": _MAX_LIST_ITEM_CHARS}, "maxItems": 4},
     },
     "required": ["incident_summary", "attack_interpretation", "evidence_ids",
                  "alternative_explanations", "recommended_actions", "limitations"],
@@ -433,25 +438,92 @@ def _request_model(dossier: dict[str, Any], config: ExplanationConfig,
     return content
 
 
-def _parse_json(content: str) -> Any:
-    text = content.strip()
-    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
-    if fenced:
-        text = fenced.group(1).strip()
+def _parse_json(content: str, max_response_bytes: int = 64_000) -> Any:
+    """Extract one bounded JSON object while allowing neutral wrapper formatting.
+
+    Diagnostic errors intentionally include only response length and parser position,
+    never model text that could echo sensitive log evidence.
+    """
+    if not isinstance(content, str):
+        raise _InvalidOutput("model response was not text")
+    text = content.strip().lstrip("\ufeff").strip()
+    response_chars = len(text)
+    if len(text.encode("utf-8", errors="replace")) > max_response_bytes:
+        raise _InvalidOutput(f"model JSON parse failed (response_size_limit; response_chars={response_chars})")
+
+    start = text.find("{")
+    if start < 0:
+        raise _InvalidOutput(f"model JSON parse failed (no_object; response_chars={response_chars})")
+
+    prefix = text[:start].strip()
+    prefix = re.sub(r"```(?:json)?\s*$", "", prefix, flags=re.IGNORECASE).strip()
+    neutral_intro = re.compile(
+        r"(?is)(?:sure[.!]?\s*,?\s*)?(?:here(?:\s+is|'s)\s+(?:(?:the|a)\s+)?"
+        r"(?:requested\s+)?(?:json(?:\s+response)?|response)|"
+        r"json(?:\s+response)?|response)(?:\s+follows)?\s*:?\s*"
+    )
+    if prefix and not neutral_intro.fullmatch(prefix):
+        raise _InvalidOutput(f"model JSON parse failed (unexpected_prefix; response_chars={response_chars})")
+
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    end = None
+    matching = {"{": "}", "[": "]"}
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in matching:
+            if len(stack) >= _MAX_JSON_DEPTH:
+                raise _InvalidOutput(
+                    f"model JSON parse failed (nesting depth limit {_MAX_JSON_DEPTH}; response_chars={response_chars})"
+                )
+            stack.append(matching[char])
+        elif char in "}]":
+            if not stack or stack[-1] != char:
+                raise _InvalidOutput(f"model JSON parse failed (mismatched delimiter; response_chars={response_chars})")
+            stack.pop()
+            if not stack:
+                end = index + 1
+                break
+    if end is None:
+        raise _InvalidOutput(f"model JSON parse failed (unterminated object; response_chars={response_chars})")
+
+    suffix = text[end:].strip()
+    if suffix == "```":
+        suffix = ""
+    if suffix:
+        raise _InvalidOutput(f"model JSON parse failed (trailing text; response_chars={response_chars})")
+    candidate = text[start:end]
     try:
-        return json.loads(text)
+        return json.loads(candidate)
     except (json.JSONDecodeError, RecursionError) as exc:
-        raise _InvalidOutput("model response was invalid JSON or too deeply nested") from exc
+        if isinstance(exc, json.JSONDecodeError):
+            diagnostic = f"syntax_error; line={exc.lineno}; column={exc.colno}"
+        else:
+            diagnostic = "parser_recursion_limit"
+        raise _InvalidOutput(
+            f"model JSON parse failed ({diagnostic}; response_chars={response_chars})"
+        ) from exc
 
 
 def _validate_schema(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict) or set(payload) != _FIELDS:
         raise _InvalidOutput("response must contain exactly the six explanation fields")
     for key in ("incident_summary", "attack_interpretation"):
-        if not isinstance(payload[key], str) or not payload[key].strip() or len(payload[key]) > 2000:
+        if not isinstance(payload[key], str) or not payload[key].strip() or len(payload[key]) > _MAX_SCALAR_CHARS:
             raise _InvalidOutput(f"{key} must be a non-empty bounded string")
     if not isinstance(payload["evidence_ids"], list) or len(payload["evidence_ids"]) > _MAX_CITED_IDS:
-        raise _InvalidOutput("evidence_ids must be a list containing at most 24 IDs")
+        raise _InvalidOutput(f"evidence_ids must be a list containing at most {_MAX_CITED_IDS} IDs")
     if any(not isinstance(value, str) or not value.strip() for value in payload["evidence_ids"]):
         raise _InvalidOutput("evidence_ids must contain non-empty strings")
     evidence_keys = [value.casefold() for value in payload["evidence_ids"]]
@@ -460,7 +532,7 @@ def _validate_schema(payload: Any) -> dict[str, Any]:
     for key, maximum in _TEXT_LIST_LIMITS.items():
         value = payload[key]
         if not isinstance(value, list) or len(value) > maximum or any(
-                not isinstance(item, str) or not item.strip() or len(item) > 1000 for item in value):
+                not isinstance(item, str) or not item.strip() or len(item) > _MAX_LIST_ITEM_CHARS for item in value):
             raise _InvalidOutput(f"{key} must be a bounded list of non-empty strings")
     return payload
 
@@ -939,7 +1011,7 @@ def explain_incident(incident: CorrelatedIncident, findings: Iterable[Finding],
                                           error_kind="unexpected_error")
 
         try:
-            payload = _parse_json(content)
+            payload = _parse_json(content, config.max_response_bytes)
             dossier_ids = {row["event_id"] for row in dossier["events"]}
             dossier_finding_ids = {row["finding_id"] for row in dossier["findings"]}
             verified, error = verify_explanation(payload, incident, finding_list, event_list,
