@@ -425,6 +425,113 @@ def test_windows_group_change_rejects_incorrect_actor_role_even_when_target_is_c
     assert "actor" in explanation.error.casefold()
 
 
+@pytest.mark.parametrize("phrasing", [
+    "The actor added CONTOSO\\Bob to the Domain Admins group.",
+    "An attacker added CONTOSO\\Bob to the Domain Admins group.",
+    "The threat actor added CONTOSO\\Bob to the Domain Admins group.",
+    "CONTOSO\\Bob was added to the Domain Admins group by the actor.",
+    "The threat actor escalated privileges by adding CONTOSO\\Bob to the Domain Admins group.",
+])
+def test_generic_actor_phrasing_accepted_when_target_member_is_correct(tmp_path, phrasing):
+    result, event, incident = _windows_privilege_analysis(tmp_path)
+    payload = _privilege_claim_payload(incident, event.event_id, phrasing)
+    with patch("trace_verified.explainer.urlopen", return_value=_ollama_response(json.dumps(payload))):
+        explanation = explain_incident(incident, result.detection_report.findings, result.events)
+    assert explanation.status == "local_model"
+    assert explanation.error is None
+
+
+@pytest.mark.parametrize("phrasing", [
+    "The actor was not specified in the logs, but CONTOSO\\Bob was added to the Domain Admins group.",
+    "The actor was unknown, but CONTOSO\\Bob was added to the Domain Admins group.",
+])
+def test_unspecified_or_unknown_actor_phrasing_accepted(tmp_path, phrasing):
+    result, event, incident = _windows_privilege_analysis(tmp_path)
+    payload = _privilege_claim_payload(incident, event.event_id, phrasing)
+    with patch("trace_verified.explainer.urlopen", return_value=_ollama_response(json.dumps(payload))):
+        explanation = explain_incident(incident, result.detection_report.findings, result.events)
+    assert explanation.status == "local_model"
+    assert explanation.error is None
+
+
+def test_privilege_removal_accepted_and_verified(tmp_path):
+    source = tmp_path / "windows_removal.jsonl"
+    source.write_text(json.dumps({
+        "TimeCreated": "2026-11-22T09:05:00Z",
+        "EventID": 4729,
+        "SubjectUserName": "CONTOSO\\Alice",
+        "TargetUserName": "Domain Admins",
+        "GroupName": "Domain Admins",
+        "MemberName": "CONTOSO\\Bob",
+        "Computer": "DC-01.contoso.local",
+    }) + "\n", encoding="utf-8")
+    result = analyze_paths([source])
+    event = next(e for e in result.events if e.event_type == "4729")
+    incident = result.correlation_report.incidents[0]
+
+    for valid_phrasing in (
+        "CONTOSO\\Alice removed CONTOSO\\Bob from the Domain Admins group.",
+        "CONTOSO\\Bob was removed from the Domain Admins group by CONTOSO\\Alice.",
+        "The actor removed CONTOSO\\Bob from the Domain Admins group.",
+        "Removal of CONTOSO\\Bob from the Domain Admins group was audited.",
+    ):
+        payload = _privilege_claim_payload(incident, event.event_id, valid_phrasing)
+        payload["attack_interpretation"] = "Audited removal of Bob from Domain Admins."
+        with patch("trace_verified.explainer.urlopen", side_effect=lambda *args, **kwargs: _ollama_response(json.dumps(payload))):
+            explanation = explain_incident(incident, result.detection_report.findings, result.events)
+        assert explanation.status == "local_model", f"Failed for {valid_phrasing}: {explanation.error}"
+
+    # Verify attribution rejection on removal when actor or target mismatch
+    for invalid_phrasing, expected in [
+        ("CONTOSO\\Mallory removed CONTOSO\\Bob from the Domain Admins group.", "actor"),
+        ("CONTOSO\\Alice removed CONTOSO\\Mallory from the Domain Admins group.", "target"),
+    ]:
+        payload = _privilege_claim_payload(incident, event.event_id, invalid_phrasing)
+        payload["attack_interpretation"] = "Audited removal of Bob from Domain Admins."
+        with patch("trace_verified.explainer.urlopen", side_effect=[
+                _ollama_response(json.dumps(payload)), _ollama_response(json.dumps(payload))]):
+            explanation = explain_incident(incident, result.detection_report.findings, result.events)
+        assert explanation.status == "rejected_by_verification"
+        assert expected in explanation.error.casefold()
+
+
+def test_investigative_inquiry_disposition_not_treated_as_approval_claim(tmp_path):
+    result, event, incident = _windows_privilege_analysis(tmp_path)
+
+    # Investigative inquiries in recommendations should not be rejected
+    for inquiry in (
+        "Review the privilege change to add Bob to the Domain Admins group and determine if it was authorized.",
+        "Investigate whether the activity was approved by system administrators.",
+        "Check if the command execution was authorized.",
+        "Verify whether this was legitimate administrative work.",
+    ):
+        payload = _privilege_claim_payload(
+            incident, event.event_id,
+            "CONTOSO\\Alice added CONTOSO\\Bob to the Domain Admins group.",
+        )
+        payload["recommended_actions"] = [inquiry]
+        with patch("trace_verified.explainer.urlopen", return_value=_ollama_response(json.dumps(payload))):
+            explanation = explain_incident(incident, result.detection_report.findings, result.events)
+        assert explanation.status == "local_model", f"Failed on inquiry: {inquiry}, error: {explanation.error}"
+
+    # Explicit affirmative claims that an unapproved incident is authorized/benign must still be rejected
+    for assertion, expected_kw in (
+        ("This activity was authorized by management.", "approval"),
+        ("The incident is legitimate administrative activity.", "disposition"),
+        ("It is safe to ignore.", "disposition"),
+    ):
+        payload = _privilege_claim_payload(
+            incident, event.event_id,
+            "CONTOSO\\Alice added CONTOSO\\Bob to the Domain Admins group.",
+        )
+        payload["incident_summary"] = assertion
+        with patch("trace_verified.explainer.urlopen", side_effect=[
+                _ollama_response(json.dumps(payload)), _ollama_response(json.dumps(payload))]):
+            explanation = explain_incident(incident, result.detection_report.findings, result.events)
+        assert explanation.status == "rejected_by_verification"
+        assert expected_kw in explanation.error.casefold()
+
+
 def test_negated_outcomes_are_allowed_but_unsupported_positive_outcomes_are_rejected():
     incident, findings, events = _case()
     payload = json.loads(_model_json())

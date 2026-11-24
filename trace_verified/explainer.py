@@ -89,6 +89,11 @@ _NEGATION = re.compile(
     r"(?:\W+\w+){0,5}\W*$", re.IGNORECASE,
 )
 _HEDGE = re.compile(r"\b(?:may|might|could|possibly|potentially|possible|perhaps)\b(?:\W+\w+){0,4}\W*$", re.IGNORECASE)
+_INQUIRY = re.compile(
+    r"\b(?:determine|check|verify|confirm|validate|investigate|ascertain|ensure|ask|assess|audit|review)\s+"
+    r"(?:if|whether)\b(?:\W+\w+){0,6}\W*$|\b(?:if|whether)\b(?:\W+\w+){0,4}\W*$",
+    re.IGNORECASE,
+)
 _SUCCESS_CLAIM = re.compile(
     r"\b(?:successful authentication|successful logon|successful login|successfully authenticated|successfully logged on|"
     r"(?:authentication|auth|logon|login) succeeded|login was successful|access succeeded|access was granted|"
@@ -96,23 +101,62 @@ _SUCCESS_CLAIM = re.compile(
     r"(?:account|system) was compromised)\b", re.IGNORECASE,
 )
 _PRIVILEGE_CLAIM = re.compile(
-    r"\b(?:privilege escalation|privileges? (?:were |was )?(?:added|changed|escalated|granted)|"
-    r"(?:added|changed|escalated|granted) administrator privileges?|became an administrator|"
-    r"group membership changed|added .{0,40} to (?:the )?(?:administrators|domain admins) group)\b", re.IGNORECASE,
+    r"\b(?:privilege escalation|privileges? (?:were |was )?(?:added|changed|escalated|granted|removed)|"
+    r"(?:added|changed|escalated|granted|removed) administrator privileges?|became an administrator|"
+    r"group membership changed|(?:added|removed) .{0,40} (?:to|from) (?:the )?(?:administrators|domain admins) group)\b", re.IGNORECASE,
 )
 _PRIVILEGE_MEMBER_CLAIMS = (
-    re.compile(r"\b(?P<member>[A-Za-z0-9_.\\@-]+)\s+was\s+(?:added|granted|removed)\s+to\b.{0,100}\bgroup\b", re.IGNORECASE),
-    re.compile(r"\b(?:adding|added)\s+(?P<member>[A-Za-z0-9_.\\@-]+)\s+to\b.{0,100}\bgroup\b", re.IGNORECASE),
-    re.compile(r"\baddition\s+of\s+(?P<member>[A-Za-z0-9_.\\@-]+)\s+to\b.{0,100}\bgroup\b", re.IGNORECASE),
+    re.compile(r"\b(?P<member>[A-Za-z0-9_.\\@-]+)\s+was\s+(?:added|granted|removed)\s+(?:to|from)\b.{0,100}\bgroup\b", re.IGNORECASE),
+    re.compile(r"\b(?:adding|added|add|removing|removed|remove)\s+(?P<member>[A-Za-z0-9_.\\@-]+)\s+(?:to|from)\b.{0,100}\bgroup\b", re.IGNORECASE),
+    re.compile(r"\b(?:addition|removal)\s+of\s+(?P<member>[A-Za-z0-9_.\\@-]+)\s+(?:to|from)\b.{0,100}\bgroup\b", re.IGNORECASE),
 )
 _PRIVILEGE_IDENTITY = r"[A-Za-z0-9_.\\@/-]+"
+_PRIVILEGE_NON_IDENTITIES = {
+    # Generic entity and role nouns
+    "actor", "initiator", "attacker", "adversary", "threat", "user", "member",
+    "account", "admin", "administrator", "administrators", "group", "domain",
+    "system", "subject", "target", "victim", "individual", "person", "entity",
+    "someone", "anyone", "operator", "analyst", "engineer", "insider",
+    # Verbs and participles commonly following "actor" or "user"
+    "added", "adding", "add", "adds",
+    "granted", "granting", "grant", "grants",
+    "removed", "removing", "remove", "removes",
+    "escalated", "escalating", "escalate", "escalates",
+    "compromised", "compromising", "compromise", "compromises",
+    "attempted", "attempting", "attempt", "attempts",
+    "performed", "performing", "perform", "performs",
+    "executed", "executing", "execute", "executes",
+    "used", "using", "use", "uses",
+    "logged", "logging", "login", "logon",
+    "created", "creating", "create", "creates",
+    "modified", "modifying", "modify", "modifies",
+    "deleted", "deleting", "delete", "deletes",
+    "invoked", "invoking", "invoke", "invokes",
+    "accessed", "accessing", "access", "accesses",
+    "elevated", "elevating", "elevate", "elevates",
+    "changed", "changing", "change", "changes",
+    "assigned", "assigning", "assign", "assigns",
+    "joined", "joining", "join", "joins",
+    "initiated", "initiating", "initiate", "initiates",
+    "conducted", "conducting", "conduct", "conducts",
+    "leveraged", "leveraging", "leverage", "leverages",
+    "authenticated", "authenticating", "authenticate",
+    "obtained", "obtaining", "obtain", "obtains",
+    # Adverbs, prepositions, conjunctions, pronouns, articles, stopwords
+    "then", "also", "to", "by", "for", "with", "from", "in", "on", "at",
+    "the", "a", "an", "this", "that", "these", "those", "it", "its", "their",
+    "and", "or", "but", "as", "via", "through", "into", "onto",
+    # Uncertainty, absence, negation markers
+    "not", "never", "no", "none", "unknown", "unspecified", "unidentified",
+    "unverified", "unnamed", "unclear", "undetermined", "null", "na", "n/a",
+}
 _PRIVILEGE_ACTOR_TARGET_CLAIMS = (
     re.compile(
         rf"\b(?P<actor>{_PRIVILEGE_IDENTITY})(?:['’]s)?\s+(?:added|granted|removed)\s+"
-        rf"(?:(?:the\s+)?(?:member|user)\s+)?(?P<member>{_PRIVILEGE_IDENTITY})\s+to\b"
+        rf"(?:(?:the\s+)?(?:member|user)\s+)?(?P<member>{_PRIVILEGE_IDENTITY})\s+(?:to|from)\b"
         r".{0,120}?\bgroup\b", re.IGNORECASE),
     re.compile(
-        rf"\b(?P<member>{_PRIVILEGE_IDENTITY})\s+was\s+(?:added|granted|removed)\s+to\b"
+        rf"\b(?P<member>{_PRIVILEGE_IDENTITY})\s+was\s+(?:added|granted|removed)\s+(?:to|from)\b"
         r".{0,120}?\bgroup\b.{0,40}?\bby\s+"
         rf"(?P<actor>{_PRIVILEGE_IDENTITY})\b", re.IGNORECASE),
 )
@@ -253,7 +297,7 @@ def _auth_counts(incident: CorrelatedIncident, events: list[CanonicalEvent]) -> 
 
 
 def _stage_priority_ids(incident: CorrelatedIncident) -> list[str]:
-    priority = {"successful_authentication": 0, "privilege_change": 1,
+    priority = {"successful_authentication": 0, "privilege_change": 1, "privilege_removal": 1,
                 "credential_attack": 2, "suspicious_execution": 3, "defense_evasion": 4}
     stages = sorted(incident.attack_stages, key=lambda stage: (priority.get(stage.stage_id, 10), stage.stage_id))
     seen: set[str] = set()
@@ -547,6 +591,11 @@ def _is_hedged(text: str, start: int) -> bool:
     return bool(_HEDGE.search(prefix))
 
 
+def _is_inquiry(text: str, start: int) -> bool:
+    prefix = re.split(r"[.!?;]", text[:start])[-1]
+    return bool(_INQUIRY.search(prefix))
+
+
 def _time_key(value: datetime | None) -> tuple[int, float] | None:
     if value is None:
         return None
@@ -751,7 +800,7 @@ def _check_disposition(text: str, incident: CorrelatedIncident) -> None:
     ]
     for pattern in claims:
         for match in pattern.finditer(text):
-            if _is_negated(text, match.start()) or _is_hedged(text, match.start()):
+            if _is_negated(text, match.start()) or _is_hedged(text, match.start()) or _is_inquiry(text, match.start()):
                 continue
             claim = match.group(0).casefold()
             if "approved" in claim or "authorized" in claim:
@@ -763,15 +812,15 @@ def _check_disposition(text: str, incident: CorrelatedIncident) -> None:
 
 def _check_outcomes(text: str, incident: CorrelatedIncident) -> None:
     stages = {stage.stage_id for stage in incident.attack_stages}
-    checks = [(_SUCCESS_CLAIM, "successful_authentication", "successful-authentication"),
-              (_PRIVILEGE_CLAIM, "privilege_change", "privilege-change"),
-              (_LATERAL_CLAIM, "lateral_movement", "lateral-movement"),
-              (_EXFIL_CLAIM, "exfiltration", "exfiltration")]
-    for pattern, stage_id, label in checks:
+    checks = [(_SUCCESS_CLAIM, {"successful_authentication"}, "successful-authentication"),
+              (_PRIVILEGE_CLAIM, {"privilege_change", "privilege_removal"}, "privilege-change"),
+              (_LATERAL_CLAIM, {"lateral_movement"}, "lateral-movement"),
+              (_EXFIL_CLAIM, set(), "exfiltration")]
+    for pattern, allowed_stages, label in checks:
         for match in pattern.finditer(text):
             if _is_negated(text, match.start()):
                 continue
-            if stage_id == "exfiltration" or stage_id not in stages:
+            if not (allowed_stages & stages):
                 raise _InvalidOutput(f"incident evidence does not support a positive {label} claim")
 
 
@@ -827,18 +876,24 @@ def _check_privilege_relationships(text: str, events: list[CanonicalEvent]) -> N
     for pattern in _PRIVILEGE_ACTOR_ROLE_CLAIMS:
         for match in pattern.finditer(text):
             actor = match.group("actor")
+            if actor.casefold() in _PRIVILEGE_NON_IDENTITIES:
+                continue
             if not any(_identity_matches(actor, event.actor, identity_context)
                        for event in membership_events):
                 raise _InvalidOutput("model privilege actor conflicts with the audited actor")
     for pattern in _PRIVILEGE_TARGET_ROLE_CLAIMS:
         for match in pattern.finditer(text):
             member = match.group("member")
+            if member.casefold() in _PRIVILEGE_NON_IDENTITIES:
+                continue
             if not any(_identity_matches(member, event.target_member, identity_context)
                        for event in membership_events):
                 raise _InvalidOutput("model privilege target conflicts with the audited target member")
     for pattern in _PRIVILEGE_MEMBER_CLAIMS:
         for match in pattern.finditer(text):
             claimed_member = match.group("member")
+            if claimed_member.casefold() in _PRIVILEGE_NON_IDENTITIES:
+                continue
             if not any(_identity_matches(claimed_member, event.target_member, identity_context)
                        for event in membership_events):
                 raise _InvalidOutput("model privilege target conflicts with the audited target member")
@@ -846,6 +901,20 @@ def _check_privilege_relationships(text: str, events: list[CanonicalEvent]) -> N
         for match in pattern.finditer(text):
             actor = match.group("actor")
             member = match.group("member")
+            actor_is_generic = actor.casefold() in _PRIVILEGE_NON_IDENTITIES
+            member_is_generic = member.casefold() in _PRIVILEGE_NON_IDENTITIES
+            if actor_is_generic and member_is_generic:
+                continue
+            if actor_is_generic:
+                if not any(_identity_matches(member, event.target_member, identity_context)
+                           for event in membership_events):
+                    raise _InvalidOutput("model privilege target conflicts with the audited target member")
+                continue
+            if member_is_generic:
+                if not any(_identity_matches(actor, event.actor, identity_context)
+                           for event in membership_events):
+                    raise _InvalidOutput("model privilege actor conflicts with the audited actor")
+                continue
             if not any(
                     _identity_matches(actor, event.actor, identity_context) and
                     _identity_matches(member, event.target_member, identity_context)
